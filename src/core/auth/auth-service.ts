@@ -1,4 +1,5 @@
 import { PublicClientApplication, type DeviceCodeRequest, type AuthenticationResult, type AccountInfo } from '@azure/msal-node';
+import { exec } from 'node:child_process';
 import { MSAL_CONFIG, SCOPES } from './config.js';
 import { tokenCachePlugin } from './token-cache-plugin.js';
 
@@ -32,6 +33,22 @@ class AuthService {
     } catch {
       return null;
     }
+  }
+
+  async acquireTokenInteractive(): Promise<AuthenticationResult> {
+    const result = await this.pca.acquireTokenInteractive({
+      scopes: SCOPES,
+      openBrowser: async (url: string) => {
+        // Open the URL in the default browser
+        const cmd = process.platform === 'darwin' ? 'open'
+          : process.platform === 'win32' ? 'start'
+          : 'xdg-open';
+        exec(`${cmd} "${url}"`);
+      },
+      successTemplate: '<h1>Authentication successful!</h1><p>You can close this window and return to the terminal.</p>',
+      errorTemplate: '<h1>Authentication failed</h1><p>Error: {{error}}</p>',
+    });
+    return result;
   }
 
   async acquireTokenByDeviceCode(

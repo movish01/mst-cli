@@ -3,6 +3,63 @@ import { htmlToText } from './html-to-text.js';
 import type { ConversationItem, ChatMessage } from './types.js';
 import { authService } from '../auth/auth-service.js';
 
+export async function findChatByName(name: string): Promise<ConversationItem[]> {
+  const client = getGraphClient();
+  const currentUser = await authService.getUserInfo();
+
+  // Search for the user first
+  const userResponse = await client
+    .api('/me/people')
+    .search(name)
+    .top(5)
+    .get();
+
+  const results: ConversationItem[] = [];
+
+  for (const person of userResponse.value) {
+    // Try to find or create a 1:1 chat with this person
+    try {
+      const chatResponse = await client
+        .api('/chats')
+        .post({
+          chatType: 'oneOnOne',
+          members: [
+            {
+              '@odata.type': '#microsoft.graph.aadUserConversationMember',
+              roles: ['owner'],
+              'user@odata.bind': `https://graph.microsoft.com/v1.0/users('${currentUser?.id}')`,
+            },
+            {
+              '@odata.type': '#microsoft.graph.aadUserConversationMember',
+              roles: ['owner'],
+              'user@odata.bind': `https://graph.microsoft.com/v1.0/users('${person.id}')`,
+            },
+          ],
+        });
+
+      results.push({
+        id: chatResponse.id,
+        type: 'oneOnOne',
+        displayName: person.displayName || name,
+        lastMessagePreview: null,
+        lastMessageTime: null,
+      });
+    } catch {
+      // If we can't create/get the chat, still show the person as a result
+      // with their user ID so user knows they were found
+      results.push({
+        id: person.id,
+        type: 'oneOnOne',
+        displayName: person.displayName || name,
+        lastMessagePreview: null,
+        lastMessageTime: null,
+      });
+    }
+  }
+
+  return results;
+}
+
 export async function getChatList(): Promise<ConversationItem[]> {
   const client = getGraphClient();
   const currentUser = await authService.getUserInfo();
@@ -11,7 +68,6 @@ export async function getChatList(): Promise<ConversationItem[]> {
     .api('/me/chats')
     .select('id,topic,chatType,lastUpdatedDateTime')
     .expand('members,lastMessagePreview')
-    .orderby('lastUpdatedDateTime desc')
     .top(50)
     .get();
 
@@ -64,6 +120,13 @@ export async function getChatList(): Promise<ConversationItem[]> {
     });
   }
 
+  // Sort by most recent first (client-side, since Graph doesn't support orderby on this endpoint)
+  chats.sort((a, b) => {
+    const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : 0;
+    const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : 0;
+    return timeB - timeA;
+  });
+
   return chats;
 }
 
@@ -79,16 +142,15 @@ export async function getChatMessages(chatId: string, top = 20): Promise<ChatMes
   return (response.value as ChatMessage[]).reverse();
 }
 
-export async function getNewChatMessages(chatId: string, since: string): Promise<ChatMessage[]> {
+export async function getLatestChatMessages(chatId: string, top = 5): Promise<ChatMessage[]> {
   const client = getGraphClient();
 
   const response = await client
     .api(`/me/chats/${chatId}/messages`)
-    .filter(`lastModifiedDateTime gt ${since}`)
-    .orderby('createdDateTime asc')
+    .top(top)
     .get();
 
-  return response.value as ChatMessage[];
+  return (response.value as ChatMessage[]).reverse();
 }
 
 export async function sendChatMessage(chatId: string, content: string): Promise<ChatMessage> {

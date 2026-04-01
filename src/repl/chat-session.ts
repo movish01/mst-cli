@@ -1,12 +1,14 @@
 import chalk from 'chalk';
 import * as readline from 'node:readline';
 import type { ConversationItem, ChatMessage } from '../core/graph/types.js';
-import { getChatMessages, sendChatMessage, getNewChatMessages } from '../core/graph/chats.js';
+import { getChatMessages, sendChatMessage, getLatestChatMessages } from '../core/graph/chats.js';
 import { getChannelMessages, sendChannelMessage } from '../core/graph/teams.js';
 import { htmlToText } from '../core/graph/html-to-text.js';
 import { formatMessageTime } from '../utils/time.js';
 import { chatPrompt } from './prompt.js';
 import { authService } from '../core/auth/auth-service.js';
+import { completer } from './completer.js';
+import { setActiveChatSession } from './session-state.js';
 
 function formatMessage(msg: ChatMessage, currentUserId: string | null): string {
   const sender = msg.from?.user?.displayName
@@ -25,20 +27,21 @@ function formatMessage(msg: ChatMessage, currentUserId: string | null): string {
   return `${senderStyled}  ${chalk.gray(time)}\n  ${body}`;
 }
 
+export interface ChatSession {
+  handleLine: (line: string) => Promise<void>;
+  cleanup: () => void;
+}
+
 export async function openChatSession(
   conversation: ConversationItem,
-  rl: readline.Interface,
 ): Promise<void> {
   const isChannel = conversation.type === 'channel';
   const currentUser = await authService.getUserInfo();
   const currentUserId = currentUser?.id || null;
 
   // Print header
-  const header = isChannel
-    ? `${conversation.displayName}`
-    : conversation.displayName;
   console.log(chalk.gray('─'.repeat(40)));
-  console.log(chalk.bold(` ${header}`));
+  console.log(chalk.bold(` ${conversation.displayName}`));
   console.log(chalk.gray('─'.repeat(40)));
 
   // Fetch and display recent messages
@@ -57,55 +60,58 @@ export async function openChatSession(
 
   console.log(chalk.gray('(type to send, Ctrl+C to go back)\n'));
 
-  // Track last message time for polling
-  let lastMessageTime = messages.length > 0
-    ? messages[messages.length - 1].createdDateTime
-    : new Date().toISOString();
+  // Track seen message IDs for polling
+  const seenMessageIds = new Set<string>(
+    messages.map((m) => m.id)
+  );
 
-  // Set up polling
+  // Create a dedicated readline for the chat session
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    prompt: chatPrompt(conversation.displayName),
+    completer,
+    terminal: true,
+  });
+
+  // Set up polling — fetch latest messages and show any new ones
   let polling = true;
   const pollInterval = setInterval(async () => {
     if (!polling) return;
     try {
-      let newMessages: ChatMessage[];
+      let latest: ChatMessage[];
       if (isChannel && conversation.teamId && conversation.channelId) {
-        // Channel messages don't support $filter well, so fetch latest and compare
-        const latest = await getChannelMessages(conversation.teamId, conversation.channelId, 5);
-        newMessages = latest.filter(
-          (m) => new Date(m.createdDateTime) > new Date(lastMessageTime)
-        );
+        latest = await getChannelMessages(conversation.teamId, conversation.channelId, 5);
       } else {
-        newMessages = await getNewChatMessages(conversation.id, lastMessageTime);
+        latest = await getLatestChatMessages(conversation.id, 5);
       }
 
+      const newMessages = latest.filter((m) => !seenMessageIds.has(m.id));
+
       if (newMessages.length > 0) {
-        // Clear current line and print new messages
         readline.clearLine(process.stdout, 0);
         readline.cursorTo(process.stdout, 0);
 
         for (const msg of newMessages) {
+          seenMessageIds.add(msg.id);
           if (msg.messageType !== 'message') continue;
           console.log(formatMessage(msg, currentUserId));
           console.log();
         }
 
-        lastMessageTime = newMessages[newMessages.length - 1].createdDateTime;
-
-        // Re-display prompt
         rl.prompt();
       }
-    } catch {
-      // Silently ignore poll errors
+    } catch (err) {
+      // Log poll errors so we can debug
+      console.log(chalk.red(`[poll error] ${err instanceof Error ? err.message : err}`));
     }
   }, 4000);
 
-  // Chat session input loop
-  return new Promise<void>((resolve) => {
-    const prompt = chatPrompt(conversation.displayName);
-    rl.setPrompt(prompt);
-    rl.prompt();
+  rl.prompt();
 
-    const onLine = async (line: string) => {
+  // Chat input loop — resolves when user presses Ctrl+C
+  return new Promise<void>((resolve) => {
+    rl.on('line', async (line) => {
       const text = line.trim();
       if (!text) {
         rl.prompt();
@@ -124,18 +130,14 @@ export async function openChatSession(
       }
 
       rl.prompt();
-    };
+    });
 
-    const onSigint = () => {
+    rl.on('SIGINT', () => {
       polling = false;
       clearInterval(pollInterval);
-      rl.removeListener('line', onLine);
-      rl.removeListener('SIGINT', onSigint);
+      rl.close();
       console.log('\n');
       resolve();
-    };
-
-    rl.on('line', onLine);
-    rl.on('SIGINT', onSigint);
+    });
   });
 }

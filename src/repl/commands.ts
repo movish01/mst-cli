@@ -2,7 +2,7 @@ import chalk from 'chalk';
 import * as readline from 'node:readline';
 import { search, select } from '@inquirer/prompts';
 import Fuse from 'fuse.js';
-import { getChatList } from '../core/graph/chats.js';
+import { getChatList, findChatByName } from '../core/graph/chats.js';
 import { getJoinedTeams, getTeamChannels } from '../core/graph/teams.js';
 import { authService } from '../core/auth/auth-service.js';
 import { formatRelativeTime } from '../utils/time.js';
@@ -13,7 +13,6 @@ import type { ConversationItem } from '../core/graph/types.js';
 async function loadConversations(): Promise<ConversationItem[]> {
   const chats = await getChatList();
 
-  // Also load team channels
   try {
     const teams = await getJoinedTeams();
     for (const team of teams) {
@@ -76,7 +75,6 @@ async function selectConversation(
     });
     return result;
   } catch {
-    // User cancelled with Ctrl+C
     return null;
   }
 }
@@ -89,17 +87,17 @@ export type CommandHandler = (
 export function getCommands(): Map<string, CommandHandler> {
   const commands = new Map<string, CommandHandler>();
 
-  commands.set('chats', async (_args, rl) => {
+  commands.set('chats', async () => {
     console.log(chalk.gray('Fetching chats...'));
     const conversations = await loadConversations();
 
     const selected = await selectConversation(conversations);
     if (selected) {
-      await openChatSession(selected, rl);
+      await openChatSession(selected);
     }
   });
 
-  commands.set('open', async (args, rl) => {
+  commands.set('open', async (args) => {
     let conversations = getCachedConversations();
     if (conversations.length === 0) {
       console.log(chalk.gray('Fetching chats...'));
@@ -107,8 +105,7 @@ export function getCommands(): Map<string, CommandHandler> {
     }
 
     if (args) {
-      // Direct open by name
-      const name = args.replace(/^["']|["']$/g, ''); // Strip quotes
+      const name = args.replace(/^["']|["']$/g, '');
       const fuse = new Fuse(conversations, { keys: ['displayName'], threshold: 0.4 });
       const results = fuse.search(name);
 
@@ -118,27 +115,23 @@ export function getCommands(): Map<string, CommandHandler> {
       }
 
       if (results.length === 1 || results[0].score! < 0.1) {
-        await openChatSession(results[0].item, rl);
+        await openChatSession(results[0].item);
         return;
       }
 
-      // Multiple matches — show selector pre-filtered
-      const selected = await selectConversation(
-        results.map((r) => r.item),
-      );
+      const selected = await selectConversation(results.map((r) => r.item));
       if (selected) {
-        await openChatSession(selected, rl);
+        await openChatSession(selected);
       }
     } else {
-      // No args — show full selector
       const selected = await selectConversation(conversations);
       if (selected) {
-        await openChatSession(selected, rl);
+        await openChatSession(selected);
       }
     }
   });
 
-  commands.set('search', async (args, rl) => {
+  commands.set('search', async (args) => {
     let conversations = getCachedConversations();
     if (conversations.length === 0) {
       console.log(chalk.gray('Fetching chats...'));
@@ -147,11 +140,11 @@ export function getCommands(): Map<string, CommandHandler> {
 
     const selected = await selectConversation(conversations, args);
     if (selected) {
-      await openChatSession(selected, rl);
+      await openChatSession(selected);
     }
   });
 
-  commands.set('teams', async (_args, rl) => {
+  commands.set('teams', async () => {
     console.log(chalk.gray('Fetching teams...'));
     const teams = await getJoinedTeams();
 
@@ -160,7 +153,6 @@ export function getCommands(): Map<string, CommandHandler> {
       return;
     }
 
-    // Select team
     let selectedTeam;
     try {
       selectedTeam = await select({
@@ -172,10 +164,9 @@ export function getCommands(): Map<string, CommandHandler> {
         })),
       });
     } catch {
-      return; // cancelled
+      return;
     }
 
-    // Fetch and select channel
     console.log(chalk.gray('Fetching channels...'));
     const channels = await getTeamChannels(selectedTeam.id);
 
@@ -195,10 +186,9 @@ export function getCommands(): Map<string, CommandHandler> {
         })),
       });
     } catch {
-      return; // cancelled
+      return;
     }
 
-    // Open channel as chat session
     const conversation: ConversationItem = {
       id: selectedChannel.id,
       type: 'channel',
@@ -209,7 +199,27 @@ export function getCommands(): Map<string, CommandHandler> {
       channelId: selectedChannel.id,
     };
 
-    await openChatSession(conversation, rl);
+    await openChatSession(conversation);
+  });
+
+  commands.set('find', async (args) => {
+    if (!args) {
+      console.log(chalk.yellow('Usage: find <name>'));
+      return;
+    }
+
+    console.log(chalk.gray(`Searching for "${args}"...`));
+    const results = await findChatByName(args);
+
+    if (results.length === 0) {
+      console.log(chalk.yellow('No people found.'));
+      return;
+    }
+
+    const selected = await selectConversation(results);
+    if (selected) {
+      await openChatSession(selected);
+    }
   });
 
   commands.set('status', async () => {
@@ -231,7 +241,8 @@ export function getCommands(): Map<string, CommandHandler> {
 ${chalk.bold('Available commands:')}
   ${chalk.cyan('chats')}          List and select a chat to open
   ${chalk.cyan('open')} ${chalk.gray('[name]')}   Open a chat (by name or selector)
-  ${chalk.cyan('search')} ${chalk.gray('<query>')} Search chats and open one
+  ${chalk.cyan('search')} ${chalk.gray('<query>')} Search loaded chats by name
+  ${chalk.cyan('find')} ${chalk.gray('<name>')}   Find a person and open chat (searches beyond loaded chats)
   ${chalk.cyan('teams')}          Browse teams and channels
   ${chalk.cyan('status')}         Show current user
   ${chalk.cyan('logout')}         Sign out

@@ -1,6 +1,6 @@
 import type { ConversationItem } from '../core/graph/types.js';
 
-const COMMANDS = ['chats', 'open', 'search', 'teams', 'help', 'exit', 'quit', 'status', 'logout'];
+const COMMANDS = ['chats', 'open', 'search', 'find', 'teams', 'help', 'exit', 'quit', 'status', 'logout'];
 
 let cachedConversations: ConversationItem[] = [];
 
