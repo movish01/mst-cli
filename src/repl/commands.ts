@@ -7,15 +7,14 @@ import { getJoinedTeams, getTeamChannels } from '../core/graph/teams.js';
 import { authService } from '../core/auth/auth-service.js';
 import { getPinnedChatIds, pinChat, unpinChat, isPinned } from '../core/pinned.js';
 import { formatRelativeTime } from '../utils/time.js';
-import { setCachedConversations, getCachedConversations } from './completer.js';
+import { setCachedConversations, getCachedConversations, setConversationLoader } from './completer.js';
 import { openChatSession } from './chat-session.js';
 import type { ConversationItem } from '../core/graph/types.js';
 
 async function loadConversations(): Promise<ConversationItem[]> {
   const chats = await getChatList();
 
-  // Filter out meetings
-  const filtered = chats.filter((c) => c.type !== 'meeting');
+  const filtered = [...chats];
 
   try {
     const teams = await getJoinedTeams();
@@ -60,11 +59,13 @@ async function makeChoices(conversations: ConversationItem[]) {
       ? chalk.gray(formatRelativeTime(c.lastMessageTime))
       : '';
     const typeTag = c.type === 'channel' ? chalk.blue('channel') :
-                    c.type === 'group' ? chalk.gray('group') : '';
+                    c.type === 'group' ? chalk.gray('group') :
+                    c.type === 'meeting' ? chalk.magenta('meeting') : '';
     const pin = pinnedIds.has(c.id) ? chalk.yellow('★ ') : '  ';
+    const name = c.unreadCount ? chalk.bold(c.displayName) : c.displayName;
 
     return {
-      name: `${pin}${c.displayName}  ${typeTag}  ${time}`,
+      name: `${pin}${name}  ${typeTag}  ${time}`,
       value: c,
       description: c.lastMessagePreview || undefined,
     };
@@ -312,6 +313,11 @@ ${chalk.bold('In a chat session:')}
   Just type and press Enter to send a message
   Press ${chalk.cyan('Ctrl+C')} to go back to the main prompt
 `);
+  });
+
+  // Register lazy loader so tab completion can fetch chats on first use
+  setConversationLoader(async () => {
+    await loadConversations();
   });
 
   return commands;

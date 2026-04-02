@@ -9,4 +9,5 @@ export const SCOPES = [
   'Chat.ReadWrite',
   'Team.ReadBasic.All',
   'User.Read',
+  'User.ReadBasic.All',
 ];

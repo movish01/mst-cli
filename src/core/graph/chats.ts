@@ -7,10 +7,12 @@ export async function findChatByName(name: string): Promise<ConversationItem[]> 
   const client = getGraphClient();
   const currentUser = await authService.getUserInfo();
 
-  // Search for the user first
+  // Search for users in the org directory
   const userResponse = await client
-    .api('/me/people')
-    .search(name)
+    .api('/users')
+    .header('ConsistencyLevel', 'eventual')
+    .search(`"displayName:${name}"`)
+    .select('id,displayName')
     .top(5)
     .get();
 
@@ -66,7 +68,7 @@ export async function getChatList(): Promise<ConversationItem[]> {
 
   const response = await client
     .api('/me/chats')
-    .select('id,topic,chatType,lastUpdatedDateTime')
+    .select('id,topic,chatType,lastUpdatedDateTime,viewpoint')
     .expand('members,lastMessagePreview')
     .top(50)
     .get();
@@ -111,12 +113,27 @@ export async function getChatList(): Promise<ConversationItem[]> {
       lastMessageTime = chat.lastUpdatedDateTime;
     }
 
+    // Skip hidden/muted chats
+    if (chat.viewpoint?.isHidden) continue;
+
+    // Skip meeting chats with no real messages (just invites)
+    if (chat.chatType === 'meeting' && !lastMessagePreview) continue;
+
+    // Determine unread status from viewpoint
+    let unreadCount = 0;
+    if (chat.viewpoint?.lastMessageReadDateTime && lastMessageTime) {
+      const readTime = new Date(chat.viewpoint.lastMessageReadDateTime).getTime();
+      const msgTime = new Date(lastMessageTime).getTime();
+      if (msgTime > readTime) unreadCount = 1;
+    }
+
     chats.push({
       id: chat.id,
       type: chat.chatType || 'oneOnOne',
       displayName,
       lastMessagePreview,
       lastMessageTime,
+      unreadCount,
     });
   }
 
