@@ -1,6 +1,7 @@
-# mst-cli
+# msteams-cli
 
 CLI chat client for Microsoft Teams — interactive REPL + one-shot commands.
+Published as `msteams-cli` on npm. Repo name is `mst-cli`.
 
 ## Project Structure
 
@@ -178,4 +179,4 @@ npm start             # node dist/index.js (REPL)
 npm run dev           # tsc --watch
 ```
 
-Entry point: `bin/mst-cli.js` → `dist/index.js`
+Entry point: `bin/msteams-cli.js` → `dist/index.js`

@@ -1,18 +1,36 @@
 {
-  "name": "mst-cli",
+  "name": "msteams-cli",
   "version": "0.1.0",
   "description": "Interactive CLI chat client for Microsoft Teams",
   "type": "module",
   "bin": {
-    "mst-cli": "./bin/mst-cli.js"
+    "msteams-cli": "./bin/msteams-cli.js"
   },
+  "files": [
+    "bin",
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
     "start": "node dist/index.js",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build && npm test"
   },
+  "keywords": [
+    "microsoft-teams",
+    "teams",
+    "chat",
+    "cli",
+    "repl",
+    "graph-api"
+  ],
+  "repository": "github:movish01/mst-cli",
+  "author": "Movish Verma",
+  "license": "MIT",
   "engines": {
     "node": ">=22"
   },

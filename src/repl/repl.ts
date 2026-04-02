@@ -19,7 +19,7 @@ function createRl(): readline.Interface {
 
 export async function startRepl(): Promise<void> {
   // Authenticate first
-  console.log(chalk.cyan('mst-cli') + ' — Microsoft Teams interactive shell\n');
+  console.log(chalk.cyan('msteams-cli') + ' — Microsoft Teams interactive shell\n');
 
   const silent = await authService.acquireTokenSilent();
   if (silent) {
@@ -144,7 +144,7 @@ export async function startRepl(): Promise<void> {
           await handler(args, rl);
         } catch (error) {
           if (error instanceof Error && error.message.includes('Not authenticated')) {
-            console.error(chalk.red('Session expired. Please restart mst-cli to re-authenticate.'));
+            console.error(chalk.red('Session expired. Please restart msteams-cli to re-authenticate.'));
           } else {
             console.error(chalk.red('Error:'), error instanceof Error ? error.message : error);
           }

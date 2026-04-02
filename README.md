@@ -1,21 +1,21 @@
-# mst-cli
+# msteams-cli
 
 A command-line client for Microsoft Teams. Chat, browse teams, and send messages — all from your terminal.
 
 Works in two modes:
-- **Interactive REPL** — run `mst-cli` with no arguments to open a shell with fuzzy search, real-time messages, and tab completion
-- **One-shot CLI** — run `mst-cli <command>` for scripting, automation, and agent integration (supports `--json` output)
+- **Interactive REPL** — run `msteams-cli` with no arguments to open a shell with fuzzy search, real-time messages, and tab completion
+- **One-shot CLI** — run `msteams-cli <command>` for scripting, automation, and agent integration (supports `--json` output)
 
 ## Install
 
 ```bash
-npx mst-cli
+npx msteams-cli
 ```
 
 Or install globally:
 
 ```bash
-npm install -g mst-cli
+npm install -g msteams-cli
 ```
 
 Requires **Node.js 22+**.
@@ -23,22 +23,22 @@ Requires **Node.js 22+**.
 ## Authentication
 
 ```bash
-mst-cli login
+msteams-cli login
 ```
 
 Opens your browser to sign in with your Microsoft org account. Tokens are cached locally at `~/.config/mst-cli/` so you only need to log in once.
 
-No Azure AD app registration is required — mst-cli uses Microsoft's pre-registered Graph CLI application.
+No Azure AD app registration is required — msteams-cli uses Microsoft's pre-registered Graph CLI application.
 
 ```bash
-mst-cli status    # verify you're logged in
-mst-cli logout    # sign out and clear cached tokens
+msteams-cli status    # verify you're logged in
+msteams-cli logout    # sign out and clear cached tokens
 ```
 
 ## Interactive Mode
 
 ```bash
-mst-cli
+msteams-cli
 ```
 
 Opens a REPL shell with the `mst>` prompt. Available commands:
@@ -77,39 +77,39 @@ All commands support `--json` for machine-readable output.
 ### List chats
 
 ```bash
-mst-cli chats
-mst-cli chats --json
+msteams-cli chats
+msteams-cli chats --json
 ```
 
 ### Read messages
 
 ```bash
-mst-cli messages <chat-id>
-mst-cli messages <chat-id> --limit 50 --json
+msteams-cli messages <chat-id>
+msteams-cli messages <chat-id> --limit 50 --json
 ```
 
 ### Send a message
 
 ```bash
-mst-cli send <chat-id> "Hello from the terminal"
-mst-cli send <chat-id> --to "John Smith" "Hey!"    # fuzzy match by name
-echo "deploy complete" | mst-cli send <chat-id>     # pipe from stdin
+msteams-cli send <chat-id> "Hello from the terminal"
+msteams-cli send <chat-id> --to "John Smith" "Hey!"    # fuzzy match by name
+echo "deploy complete" | msteams-cli send <chat-id>     # pipe from stdin
 ```
 
 ### Teams and channels
 
 ```bash
-mst-cli teams                                          # list your teams
-mst-cli teams --json
-mst-cli channels <team-id>                             # list channels in a team
-mst-cli send-channel <team-id> <channel-id> "message"  # send to a channel
+msteams-cli teams                                              # list your teams
+msteams-cli teams --json
+msteams-cli channels <team-id>                                 # list channels in a team
+msteams-cli send-channel <team-id> <channel-id> "message"      # send to a channel
 ```
 
 ### Unread
 
 ```bash
-mst-cli unread
-mst-cli unread --json
+msteams-cli unread
+msteams-cli unread --json
 ```
 
 ### Watch (for agents)
@@ -117,28 +117,28 @@ mst-cli unread --json
 Stream new messages as JSON lines — designed for AI agents and automation:
 
 ```bash
-mst-cli watch <chat-id>
-mst-cli watch <chat-id> --interval 2000
+msteams-cli watch <chat-id>
+msteams-cli watch <chat-id> --interval 2000
 ```
 
 Each new message is printed as a single JSON line to stdout. Press Ctrl+C to stop.
 
 ## Agent / Automation Usage
 
-mst-cli is designed to work with AI agents and scripts. Typical workflow:
+msteams-cli is designed to work with AI agents and scripts. Typical workflow:
 
 ```bash
 # 1. Get chat list and find the right chat ID
-CHAT_ID=$(mst-cli chats --json | jq -r '.[] | select(.displayName == "John Smith") | .id')
+CHAT_ID=$(msteams-cli chats --json | jq -r '.[] | select(.displayName == "John Smith") | .id')
 
 # 2. Read recent messages
-mst-cli messages "$CHAT_ID" --json
+msteams-cli messages "$CHAT_ID" --json
 
 # 3. Send a message
-mst-cli send "$CHAT_ID" "Automated reply from my agent"
+msteams-cli send "$CHAT_ID" "Automated reply from my agent"
 
 # 4. Stream new messages in real-time
-mst-cli watch "$CHAT_ID" | while read -r line; do
+msteams-cli watch "$CHAT_ID" | while read -r line; do
   echo "$line" | jq .
   # process each message...
 done
@@ -147,7 +147,7 @@ done
 Pipe support lets you chain with other tools:
 
 ```bash
-echo "Build #42 passed" | mst-cli send <chat-id>
+echo "Build #42 passed" | msteams-cli send <chat-id>
 ```
 
 ## Pinned Chats
@@ -164,7 +164,7 @@ Pinned chats are stored locally at `~/.config/mst-cli/pinned-chats.json`.
 
 ## Permissions
 
-mst-cli requests the following Microsoft Graph scopes:
+msteams-cli requests the following Microsoft Graph scopes:
 
 - `Chat.ReadWrite` — read and send chat messages
 - `Team.ReadBasic.All` — list teams and channels

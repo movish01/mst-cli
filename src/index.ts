@@ -4,7 +4,7 @@ import { startRepl } from './repl/repl.js';
 const program = new Command();
 
 program
-  .name('mst-cli')
+  .name('msteams-cli')
   .description('Interactive CLI chat client for Microsoft Teams')
   .version('0.1.0');
 

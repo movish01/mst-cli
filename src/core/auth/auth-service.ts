@@ -72,7 +72,7 @@ class AuthService {
     if (silent?.accessToken) {
       return silent.accessToken;
     }
-    throw new Error('Not authenticated. Run "mst-cli login" first.');
+    throw new Error('Not authenticated. Run "msteams-cli login" first.');
   }
 
   async isAuthenticated(): Promise<boolean> {

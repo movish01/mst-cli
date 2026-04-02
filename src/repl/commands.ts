@@ -316,7 +316,7 @@ export function getCommands(): Map<string, CommandHandler> {
 
   commands.set('logout', async () => {
     await authService.logout();
-    console.log(chalk.green('✓') + ' Logged out. Run ' + chalk.cyan('mst-cli login') + ' to re-authenticate.');
+    console.log(chalk.green('✓') + ' Logged out. Run ' + chalk.cyan('msteams-cli login') + ' to re-authenticate.');
   });
 
   commands.set('help', async () => {
@@ -332,7 +332,7 @@ ${chalk.bold('Available commands:')}
   ${chalk.cyan('status')}             Show current user info
   ${chalk.cyan('logout')}             Sign out
   ${chalk.cyan('help')}               Show this help
-  ${chalk.cyan('exit')}               Quit mst-cli
+  ${chalk.cyan('exit')}               Quit msteams-cli
 
 ${chalk.bold('In a chat session:')}
   Just type and press Enter to send a message
