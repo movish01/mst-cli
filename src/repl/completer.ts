@@ -13,16 +13,19 @@ export function getCachedConversations(): ConversationItem[] {
 }
 
 export function completer(line: string): [string[], string] {
-  // If line starts with "open ", complete chat names
-  if (line.startsWith('open ')) {
-    const partial = line.slice(5).toLowerCase();
+  // "open <partial>" or "find <partial>" — complete chat names
+  const openMatch = line.match(/^(open|find)\s+(.*)/i);
+  if (openMatch) {
+    const cmd = openMatch[1];
+    const partial = openMatch[2].replace(/^["']/, '').toLowerCase();
     const matches = cachedConversations
       .filter((c) => c.displayName.toLowerCase().includes(partial))
-      .map((c) => `open "${c.displayName}"`);
+      .map((c) => `${cmd} "${c.displayName}"`);
     return [matches.length ? matches : [], line];
   }
 
   // Complete command names
-  const matches = COMMANDS.filter((cmd) => cmd.startsWith(line.toLowerCase()));
-  return [matches, line];
+  const trimmed = line.trimStart();
+  const matches = COMMANDS.filter((cmd) => cmd.startsWith(trimmed.toLowerCase()));
+  return [matches, trimmed];
 }
