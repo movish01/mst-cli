@@ -1,7 +1,7 @@
 import chalk from 'chalk';
 import * as readline from 'node:readline';
 import type { ConversationItem, ChatMessage } from '../core/graph/types.js';
-import { getChatMessages, sendChatMessage, getLatestChatMessages } from '../core/graph/chats.js';
+import { getChatMessages, sendChatMessage, getLatestChatMessages, markChatAsRead, getOlderMessages, getOrCreateChat } from '../core/graph/chats.js';
 import { getChannelMessages, sendChannelMessage } from '../core/graph/teams.js';
 import { htmlToText } from '../core/graph/html-to-text.js';
 import { formatMessageTime } from '../utils/time.js';
@@ -35,6 +35,9 @@ export interface ChatSession {
 export async function openChatSession(
   conversation: ConversationItem,
 ): Promise<void> {
+  // If this is a directory search result, create the chat on demand
+  conversation = await getOrCreateChat(conversation);
+
   const isChannel = conversation.type === 'channel';
   const currentUser = await authService.getUserInfo();
   const currentUserId = currentUser?.id || null;
@@ -58,7 +61,16 @@ export async function openChatSession(
     console.log();
   }
 
-  console.log(chalk.gray('(type to send, Ctrl+C to go back)\n'));
+  // Mark chat as read
+  if (!isChannel) {
+    markChatAsRead(conversation.id).catch(() => {});
+  }
+
+  // Track oldest message time for "more" pagination
+  const messageTimestamps = messages.filter(m => m.messageType === 'message');
+  let oldestMessageTime = messageTimestamps.length > 0 ? messageTimestamps[0].createdDateTime : null;
+
+  console.log(chalk.gray('(type to send, "more" for history, Ctrl+C to go back)\n'));
 
   // Track seen message IDs for polling
   const seenMessageIds = new Set<string>(
@@ -114,6 +126,46 @@ export async function openChatSession(
     rl.on('line', async (line) => {
       const text = line.trim();
       if (!text) {
+        rl.prompt();
+        return;
+      }
+
+      // "more" — load older messages
+      if (text.toLowerCase() === 'more') {
+        if (!oldestMessageTime) {
+          console.log(chalk.gray('No more messages to load.'));
+          rl.prompt();
+          return;
+        }
+        try {
+          let older: ChatMessage[];
+          if (isChannel && conversation.teamId && conversation.channelId) {
+            // Channel older messages not easily filterable, skip for now
+            console.log(chalk.gray('History scrollback not available for channels.'));
+            rl.prompt();
+            return;
+          } else {
+            older = await getOlderMessages(conversation.id, oldestMessageTime, 20);
+          }
+
+          if (older.length === 0) {
+            console.log(chalk.gray('No more messages.'));
+          } else {
+            console.log(chalk.gray(`── ${older.length} older messages ──`));
+            for (const msg of older) {
+              seenMessageIds.add(msg.id);
+              if (msg.messageType !== 'message') continue;
+              console.log(formatMessage(msg, currentUserId));
+              console.log();
+            }
+            const olderFiltered = older.filter(m => m.messageType === 'message');
+            if (olderFiltered.length > 0) {
+              oldestMessageTime = olderFiltered[0].createdDateTime;
+            }
+          }
+        } catch (err) {
+          console.log(chalk.red(`Failed to load history: ${err instanceof Error ? err.message : err}`));
+        }
         rl.prompt();
         return;
       }

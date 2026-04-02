@@ -1,6 +1,7 @@
 import * as readline from 'node:readline';
 import chalk from 'chalk';
 import { authService } from '../core/auth/auth-service.js';
+import { getUnreadChats } from '../core/graph/chats.js';
 import { mainPrompt } from './prompt.js';
 import { completer } from './completer.js';
 import { getCommands } from './commands.js';
@@ -52,12 +53,52 @@ export async function startRepl(): Promise<void> {
 
   const commands = getCommands();
   let sigintCount = 0;
+  const notifiedChatIds = new Set<string>();
+
+  // Background notification polling
+  let notifyInterval: ReturnType<typeof setInterval> | null = null;
+
+  function startNotifications(rl: readline.Interface) {
+    if (notifyInterval) clearInterval(notifyInterval);
+    notifyInterval = setInterval(async () => {
+      // Don't notify if in a chat session
+      if (getActiveChatSession()) return;
+      try {
+        const unread = await getUnreadChats();
+        for (const chat of unread) {
+          if (notifiedChatIds.has(chat.id)) continue;
+          notifiedChatIds.add(chat.id);
+
+          readline.clearLine(process.stdout, 0);
+          readline.cursorTo(process.stdout, 0);
+          const preview = chat.lastMessagePreview ? `: ${chat.lastMessagePreview.slice(0, 50)}` : '';
+          console.log(chalk.cyan('  [new]') + ` ${chalk.bold(chat.displayName)}${chalk.gray(preview)}`);
+          rl.prompt();
+        }
+        // Clear notifications for chats that are no longer unread
+        const unreadIds = new Set(unread.map(c => c.id));
+        for (const id of notifiedChatIds) {
+          if (!unreadIds.has(id)) notifiedChatIds.delete(id);
+        }
+      } catch {
+        // Silently ignore notification errors
+      }
+    }, 30000); // Check every 30s
+  }
+
+  function stopNotifications() {
+    if (notifyInterval) {
+      clearInterval(notifyInterval);
+      notifyInterval = null;
+    }
+  }
 
   // Main REPL loop — recreate readline after each command
   // because @inquirer/prompts takes over stdin and breaks readline
   const loop = async (): Promise<void> => {
     const rl = createRl();
     rl.prompt();
+    startNotifications(rl);
 
     return new Promise<void>((resolve) => {
       rl.on('line', async (line) => {
@@ -83,6 +124,7 @@ export async function startRepl(): Promise<void> {
 
         if (cmd === 'exit' || cmd === 'quit') {
           console.log(chalk.gray('Goodbye!'));
+          stopNotifications();
           rl.close();
           process.exit(0);
         }
@@ -96,6 +138,7 @@ export async function startRepl(): Promise<void> {
 
         // Close readline before running command (inquirer needs raw stdin)
         rl.close();
+        stopNotifications();
 
         try {
           await handler(args, rl);

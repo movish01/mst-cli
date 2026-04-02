@@ -2,7 +2,7 @@ import chalk from 'chalk';
 import * as readline from 'node:readline';
 import { search, select } from '@inquirer/prompts';
 import Fuse from 'fuse.js';
-import { getChatList, findChatByName } from '../core/graph/chats.js';
+import { getChatList, findChatByName, getUnreadChats } from '../core/graph/chats.js';
 import { getJoinedTeams, getTeamChannels } from '../core/graph/teams.js';
 import { authService } from '../core/auth/auth-service.js';
 import { getPinnedChatIds, pinChat, unpinChat, isPinned } from '../core/pinned.js';
@@ -281,10 +281,34 @@ export function getCommands(): Map<string, CommandHandler> {
     }
   });
 
+  commands.set('unread', async () => {
+    console.log(chalk.gray('Checking unread...'));
+    const unread = await getUnreadChats();
+
+    if (unread.length === 0) {
+      console.log(chalk.green('✓') + ' All caught up!');
+      return;
+    }
+
+    console.log(chalk.bold(`${unread.length} unread chat${unread.length > 1 ? 's' : ''}:\n`));
+    for (const chat of unread) {
+      const time = chat.lastMessageTime ? chalk.gray(formatRelativeTime(chat.lastMessageTime)) : '';
+      const preview = chat.lastMessagePreview ? chalk.gray(` — ${chat.lastMessagePreview.slice(0, 50)}`) : '';
+      console.log(`  ${chalk.bold(chat.displayName)}  ${time}${preview}`);
+    }
+    console.log();
+
+    const selected = await selectConversation(unread);
+    if (selected) {
+      await openChatSession(selected);
+    }
+  });
+
   commands.set('status', async () => {
     const user = await authService.getUserInfo();
     if (user) {
       console.log(chalk.green('✓') + ` ${chalk.bold(user.displayName)} (${user.mail})`);
+      console.log(chalk.gray('  Signed in to Microsoft Teams.'));
     } else {
       console.log(chalk.yellow('Not logged in.'));
     }
@@ -298,19 +322,21 @@ export function getCommands(): Map<string, CommandHandler> {
   commands.set('help', async () => {
     console.log(`
 ${chalk.bold('Available commands:')}
-  ${chalk.cyan('chats')}          List and select a chat to open
-  ${chalk.cyan('open')} ${chalk.gray('[name]')}   Open a chat (by name or selector)
-  ${chalk.cyan('search')} ${chalk.gray('<query>')} Search loaded chats by name
-  ${chalk.cyan('find')} ${chalk.gray('<name>')}   Find a person and open chat (searches entire org)
-  ${chalk.cyan('pin')} ${chalk.gray('[name]')}    Pin/unpin a chat (pinned chats show on top)
-  ${chalk.cyan('teams')}          Browse teams and channels
-  ${chalk.cyan('status')}         Show current user
-  ${chalk.cyan('logout')}         Sign out
-  ${chalk.cyan('help')}           Show this help
-  ${chalk.cyan('exit')}           Quit mst-cli
+  ${chalk.cyan('chats')}              List and select a chat to open
+  ${chalk.cyan('open')} ${chalk.gray('[name]')}       Open a chat (by name or selector)
+  ${chalk.cyan('search')} ${chalk.gray('<query>')}     Search loaded chats by name
+  ${chalk.cyan('find')} ${chalk.gray('<name>')}       Find a person and open chat (searches entire org)
+  ${chalk.cyan('pin')} ${chalk.gray('[name]')}        Pin/unpin a chat (pinned chats show on top)
+  ${chalk.cyan('unread')}             Show chats with unread messages
+  ${chalk.cyan('teams')}              Browse teams and channels
+  ${chalk.cyan('status')}             Show current user info
+  ${chalk.cyan('logout')}             Sign out
+  ${chalk.cyan('help')}               Show this help
+  ${chalk.cyan('exit')}               Quit mst-cli
 
 ${chalk.bold('In a chat session:')}
   Just type and press Enter to send a message
+  Type ${chalk.cyan('more')} to load older messages
   Press ${chalk.cyan('Ctrl+C')} to go back to the main prompt
 `);
   });

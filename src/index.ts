@@ -91,4 +91,25 @@ program
     await sendChannelCommand(teamId, channelId, message, opts);
   });
 
+// Watch command (agent-friendly: streams new messages as JSON lines)
+program
+  .command('watch <chatId>')
+  .description('Stream new messages as JSON lines (for agents)')
+  .option('--interval <ms>', 'Polling interval in milliseconds', '4000')
+  .option('--channel <teamId:channelId>', 'Watch a channel instead of a chat')
+  .action(async (chatId, opts) => {
+    const { watchCommand } = await import('./cli/watch.js');
+    await watchCommand(chatId, opts);
+  });
+
+// Unread command
+program
+  .command('unread')
+  .description('List chats with unread messages')
+  .option('--json', 'Output as JSON')
+  .action(async (opts) => {
+    const { unreadCommand } = await import('./cli/unread.js');
+    await unreadCommand(opts);
+  });
+
 program.parse();

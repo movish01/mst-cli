@@ -20,7 +20,7 @@ describe('chatsCommand', () => {
 
   it('outputs JSON when --json flag is set', async () => {
     const mockChats = [
-      { id: '1', type: 'oneOnOne', displayName: 'John', lastMessagePreview: null, lastMessageTime: null },
+      { id: '1', type: 'oneOnOne' as const, displayName: 'John', lastMessagePreview: null, lastMessageTime: null },
     ];
     vi.mocked(getChatList).mockResolvedValueOnce(mockChats);
 
@@ -41,7 +41,7 @@ describe('chatsCommand', () => {
 
   it('prints chat list for human output', async () => {
     vi.mocked(getChatList).mockResolvedValueOnce([
-      { id: '1', type: 'oneOnOne', displayName: 'John Smith', lastMessagePreview: null, lastMessageTime: '2026-04-01T10:00:00Z' },
+      { id: '1', type: 'oneOnOne' as const, displayName: 'John Smith', lastMessagePreview: null, lastMessageTime: '2026-04-01T10:00:00Z' },
     ]);
     const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
@@ -58,7 +58,7 @@ describe('messagesCommand', () => {
 
   it('outputs JSON when --json flag is set', async () => {
     const mockMessages = [
-      { id: 'm1', messageType: 'message', body: { content: 'hi', contentType: 'text' }, createdDateTime: '2026-04-01T10:00:00Z', from: { user: { id: 'u1', displayName: 'John' } } },
+      { id: 'm1', messageType: 'message', body: { content: 'hi', contentType: 'text' as const }, createdDateTime: '2026-04-01T10:00:00Z', from: { user: { id: 'u1', displayName: 'John' } } },
     ];
     vi.mocked(getChatMessages).mockResolvedValueOnce(mockMessages);
 

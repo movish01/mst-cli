@@ -34,49 +34,17 @@ export async function findChatByName(name: string): Promise<ConversationItem[]> 
 
   const results: ConversationItem[] = [];
 
-  // If directory search worked, create/find chats for those users
+  // Return users as results without creating chats
+  // Chat will be created only when user selects one (via getOrCreateChat)
   for (const person of users) {
-    // Skip self — Graph API doesn't support self-chat
     if (person.id === currentUser?.id) continue;
-
-    // Try to find or create a 1:1 chat with this person
-    try {
-      const chatResponse = await client
-        .api('/chats')
-        .post({
-          chatType: 'oneOnOne',
-          members: [
-            {
-              '@odata.type': '#microsoft.graph.aadUserConversationMember',
-              roles: ['owner'],
-              'user@odata.bind': `https://graph.microsoft.com/v1.0/users('${currentUser?.id}')`,
-            },
-            {
-              '@odata.type': '#microsoft.graph.aadUserConversationMember',
-              roles: ['owner'],
-              'user@odata.bind': `https://graph.microsoft.com/v1.0/users('${person.id}')`,
-            },
-          ],
-        });
-
-      results.push({
-        id: chatResponse.id,
-        type: 'oneOnOne',
-        displayName: person.displayName || name,
-        lastMessagePreview: null,
-        lastMessageTime: null,
-      });
-    } catch {
-      // If we can't create/get the chat, still show the person as a result
-      // with their user ID so user knows they were found
-      results.push({
-        id: person.id,
-        type: 'oneOnOne',
-        displayName: person.displayName || name,
-        lastMessagePreview: null,
-        lastMessageTime: null,
-      });
-    }
+    results.push({
+      id: `user:${person.id}`,
+      type: 'oneOnOne',
+      displayName: person.displayName || name,
+      lastMessagePreview: null,
+      lastMessageTime: null,
+    });
   }
 
   // If directory search found nothing, fall back to searching existing chats by member name
@@ -89,6 +57,38 @@ export async function findChatByName(name: string): Promise<ConversationItem[]> 
   }
 
   return results;
+}
+
+export async function getOrCreateChat(conversation: ConversationItem): Promise<ConversationItem> {
+  // If ID starts with "user:", it's a person from directory search — create chat on demand
+  if (!conversation.id.startsWith('user:')) return conversation;
+
+  const userId = conversation.id.slice(5);
+  const client = getGraphClient();
+  const currentUser = await authService.getUserInfo();
+
+  const chatResponse = await client
+    .api('/chats')
+    .post({
+      chatType: 'oneOnOne',
+      members: [
+        {
+          '@odata.type': '#microsoft.graph.aadUserConversationMember',
+          roles: ['owner'],
+          'user@odata.bind': `https://graph.microsoft.com/v1.0/users('${currentUser?.id}')`,
+        },
+        {
+          '@odata.type': '#microsoft.graph.aadUserConversationMember',
+          roles: ['owner'],
+          'user@odata.bind': `https://graph.microsoft.com/v1.0/users('${userId}')`,
+        },
+      ],
+    });
+
+  return {
+    ...conversation,
+    id: chatResponse.id,
+  };
 }
 
 export async function getChatList(): Promise<ConversationItem[]> {
@@ -211,4 +211,39 @@ export async function sendChatMessage(chatId: string, content: string): Promise<
     });
 
   return response as ChatMessage;
+}
+
+export async function markChatAsRead(chatId: string): Promise<void> {
+  const client = getGraphClient();
+  try {
+    await client
+      .api(`/me/chats/${chatId}/markChatReadForUser`)
+      .post({
+        user: { '@odata.type': 'microsoft.graph.teamworkUserIdentity' },
+      });
+  } catch {
+    // markChatReadForUser may not be available — silently ignore
+  }
+}
+
+export async function getOlderMessages(
+  chatId: string,
+  beforeDateTime: string,
+  top = 20,
+): Promise<ChatMessage[]> {
+  const client = getGraphClient();
+
+  const response = await client
+    .api(`/me/chats/${chatId}/messages`)
+    .filter(`createdDateTime lt ${beforeDateTime}`)
+    .top(top)
+    .orderby('createdDateTime desc')
+    .get();
+
+  return (response.value as ChatMessage[]).reverse();
+}
+
+export async function getUnreadChats(): Promise<ConversationItem[]> {
+  const chats = await getChatList();
+  return chats.filter((c) => c.unreadCount && c.unreadCount > 0);
 }
