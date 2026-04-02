@@ -6,6 +6,7 @@ export interface ConversationItem {
   lastMessageTime: string | null;
   teamId?: string;
   channelId?: string;
+  unreadCount?: number;
 }
 
 export interface ChatMember {

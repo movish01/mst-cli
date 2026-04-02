@@ -7,18 +7,38 @@ export async function findChatByName(name: string): Promise<ConversationItem[]> 
   const client = getGraphClient();
   const currentUser = await authService.getUserInfo();
 
-  // Search for users in the org directory
-  const userResponse = await client
-    .api('/users')
-    .header('ConsistencyLevel', 'eventual')
-    .search(`"displayName:${name}"`)
-    .select('id,displayName')
-    .top(5)
-    .get();
+  // First try searching the org directory
+  let users: any[] = [];
+  try {
+    const searchResponse = await client
+      .api('/users')
+      .header('ConsistencyLevel', 'eventual')
+      .search(`"displayName:${name}"`)
+      .select('id,displayName')
+      .top(5)
+      .get();
+    users = searchResponse.value;
+  } catch {
+    try {
+      const filterResponse = await client
+        .api('/users')
+        .filter(`startswith(displayName,'${name}')`)
+        .select('id,displayName')
+        .top(5)
+        .get();
+      users = filterResponse.value;
+    } catch {
+      // Directory access blocked
+    }
+  }
 
   const results: ConversationItem[] = [];
 
-  for (const person of userResponse.value) {
+  // If directory search worked, create/find chats for those users
+  for (const person of users) {
+    // Skip self — Graph API doesn't support self-chat
+    if (person.id === currentUser?.id) continue;
+
     // Try to find or create a 1:1 chat with this person
     try {
       const chatResponse = await client
@@ -57,6 +77,15 @@ export async function findChatByName(name: string): Promise<ConversationItem[]> 
         lastMessageTime: null,
       });
     }
+  }
+
+  // If directory search found nothing, fall back to searching existing chats by member name
+  if (results.length === 0) {
+    const allChats = await getChatList();
+    const Fuse = (await import('fuse.js')).default;
+    const fuse = new Fuse(allChats, { keys: ['displayName'], threshold: 0.4 });
+    const matched = fuse.search(name).map((r) => r.item);
+    return matched;
   }
 
   return results;
