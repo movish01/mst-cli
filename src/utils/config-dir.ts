@@ -16,3 +16,7 @@ export function getConfigDir(): string {
 export function getTokenCachePath(): string {
   return join(CONFIG_DIR, 'token-cache.json');
 }
+
+export function getPinnedChatsPath(): string {
+  return join(CONFIG_DIR, 'pinned-chats.json');
+}

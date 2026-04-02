@@ -5,6 +5,7 @@ import Fuse from 'fuse.js';
 import { getChatList, findChatByName } from '../core/graph/chats.js';
 import { getJoinedTeams, getTeamChannels } from '../core/graph/teams.js';
 import { authService } from '../core/auth/auth-service.js';
+import { getPinnedChatIds, pinChat, unpinChat, isPinned } from '../core/pinned.js';
 import { formatRelativeTime } from '../utils/time.js';
 import { setCachedConversations, getCachedConversations } from './completer.js';
 import { openChatSession } from './chat-session.js';
@@ -13,12 +14,15 @@ import type { ConversationItem } from '../core/graph/types.js';
 async function loadConversations(): Promise<ConversationItem[]> {
   const chats = await getChatList();
 
+  // Filter out meetings
+  const filtered = chats.filter((c) => c.type !== 'meeting');
+
   try {
     const teams = await getJoinedTeams();
     for (const team of teams) {
       const channels = await getTeamChannels(team.id);
       for (const ch of channels) {
-        chats.push({
+        filtered.push({
           id: ch.id,
           type: 'channel',
           displayName: `#${ch.displayName} (${team.displayName})`,
@@ -33,21 +37,34 @@ async function loadConversations(): Promise<ConversationItem[]> {
     // Teams access might fail — continue with chats only
   }
 
-  setCachedConversations(chats);
-  return chats;
+  // Sort: pinned first, then by most recent
+  const pinnedIds = await getPinnedChatIds();
+  filtered.sort((a, b) => {
+    const aPinned = pinnedIds.has(a.id) ? 1 : 0;
+    const bPinned = pinnedIds.has(b.id) ? 1 : 0;
+    if (aPinned !== bPinned) return bPinned - aPinned;
+    const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : 0;
+    const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : 0;
+    return timeB - timeA;
+  });
+
+  setCachedConversations(filtered);
+  return filtered;
 }
 
-function makeChoices(conversations: ConversationItem[]) {
+async function makeChoices(conversations: ConversationItem[]) {
+  const pinnedIds = await getPinnedChatIds();
+
   return conversations.map((c) => {
     const time = c.lastMessageTime
       ? chalk.gray(formatRelativeTime(c.lastMessageTime))
       : '';
     const typeTag = c.type === 'channel' ? chalk.blue('channel') :
-                    c.type === 'group' ? chalk.gray('group') :
-                    c.type === 'meeting' ? chalk.gray('meeting') : '';
+                    c.type === 'group' ? chalk.gray('group') : '';
+    const pin = pinnedIds.has(c.id) ? chalk.yellow('★ ') : '  ';
 
     return {
-      name: `${c.displayName}  ${typeTag}  ${time}`,
+      name: `${pin}${c.displayName}  ${typeTag}  ${time}`,
       value: c,
       description: c.lastMessagePreview || undefined,
     };
@@ -66,7 +83,7 @@ async function selectConversation(
   try {
     const result = await search<ConversationItem>({
       message: 'Select a chat:',
-      source: (input) => {
+      source: async (input) => {
         const term = input || initialFilter || '';
         if (!term) return makeChoices(conversations);
         const filtered = fuse.search(term).map((r) => r.item);
@@ -141,6 +158,47 @@ export function getCommands(): Map<string, CommandHandler> {
     const selected = await selectConversation(conversations, args);
     if (selected) {
       await openChatSession(selected);
+    }
+  });
+
+  commands.set('pin', async (args) => {
+    let conversations = getCachedConversations();
+    if (conversations.length === 0) {
+      console.log(chalk.gray('Fetching chats...'));
+      conversations = await loadConversations();
+    }
+
+    if (args) {
+      // Pin by name
+      const name = args.replace(/^["']|["']$/g, '');
+      const fuse = new Fuse(conversations, { keys: ['displayName'], threshold: 0.4 });
+      const results = fuse.search(name);
+
+      if (results.length === 0) {
+        console.log(chalk.yellow(`No chat found matching "${name}"`));
+        return;
+      }
+
+      const chat = results[0].item;
+      if (await isPinned(chat.id)) {
+        await unpinChat(chat.id);
+        console.log(chalk.green('✓') + ` Unpinned ${chalk.bold(chat.displayName)}`);
+      } else {
+        await pinChat(chat.id, chat.displayName);
+        console.log(chalk.green('✓') + ` Pinned ${chalk.yellow('★')} ${chalk.bold(chat.displayName)}`);
+      }
+    } else {
+      // Show selector to pick which chat to pin/unpin
+      const selected = await selectConversation(conversations);
+      if (selected) {
+        if (await isPinned(selected.id)) {
+          await unpinChat(selected.id);
+          console.log(chalk.green('✓') + ` Unpinned ${chalk.bold(selected.displayName)}`);
+        } else {
+          await pinChat(selected.id, selected.displayName);
+          console.log(chalk.green('✓') + ` Pinned ${chalk.yellow('★')} ${chalk.bold(selected.displayName)}`);
+        }
+      }
     }
   });
 
@@ -242,7 +300,8 @@ ${chalk.bold('Available commands:')}
   ${chalk.cyan('chats')}          List and select a chat to open
   ${chalk.cyan('open')} ${chalk.gray('[name]')}   Open a chat (by name or selector)
   ${chalk.cyan('search')} ${chalk.gray('<query>')} Search loaded chats by name
-  ${chalk.cyan('find')} ${chalk.gray('<name>')}   Find a person and open chat (searches beyond loaded chats)
+  ${chalk.cyan('find')} ${chalk.gray('<name>')}   Find a person and open chat (searches entire org)
+  ${chalk.cyan('pin')} ${chalk.gray('[name]')}    Pin/unpin a chat (pinned chats show on top)
   ${chalk.cyan('teams')}          Browse teams and channels
   ${chalk.cyan('status')}         Show current user
   ${chalk.cyan('logout')}         Sign out

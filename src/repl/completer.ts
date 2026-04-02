@@ -1,6 +1,6 @@
 import type { ConversationItem } from '../core/graph/types.js';
 
-const COMMANDS = ['chats', 'open', 'search', 'find', 'teams', 'help', 'exit', 'quit', 'status', 'logout'];
+const COMMANDS = ['chats', 'open', 'search', 'find', 'pin', 'teams', 'help', 'exit', 'quit', 'status', 'logout'];
 
 let cachedConversations: ConversationItem[] = [];
 
@@ -14,7 +14,7 @@ export function getCachedConversations(): ConversationItem[] {
 
 export function completer(line: string): [string[], string] {
   // "open <partial>" or "find <partial>" — complete chat names
-  const openMatch = line.match(/^(open|find)\s+(.*)/i);
+  const openMatch = line.match(/^(open|find|pin)\s+(.*)/i);
   if (openMatch) {
     const cmd = openMatch[1];
     const partial = openMatch[2].replace(/^["']/, '').toLowerCase();
