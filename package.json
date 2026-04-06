@@ -28,7 +28,14 @@
     "repl",
     "graph-api"
   ],
-  "repository": "github:movish01/mst-cli",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/movish01/mst-cli.git"
+  },
+  "homepage": "https://github.com/movish01/mst-cli#readme",
+  "bugs": {
+    "url": "https://github.com/movish01/mst-cli/issues"
+  },
   "author": "Movish Verma",
   "license": "MIT",
   "engines": {

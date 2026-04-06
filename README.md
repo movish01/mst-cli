@@ -1,5 +1,8 @@
 # msteams-cli
 
+[![npm version](https://img.shields.io/npm/v/msteams-cli)](https://www.npmjs.com/package/msteams-cli)
+[![license](https://img.shields.io/npm/l/msteams-cli)](./LICENSE)
+
 A command-line client for Microsoft Teams. Chat, browse teams, and send messages — all from your terminal.
 
 Works in two modes:
