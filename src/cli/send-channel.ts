@@ -2,7 +2,7 @@ import chalk from 'chalk';
 import { sendChannelMessage } from '../core/graph/teams.js';
 import { outputJson } from '../utils/output.js';
 
-export async function sendChannelCommand(teamId: string, channelId: string, message: string | undefined, opts: { json?: boolean }): Promise<void> {
+export async function sendChannelCommand(teamId: string, channelId: string, message: string | undefined, opts: { json?: boolean; html?: boolean }): Promise<void> {
   // Read message from stdin if not provided
   let content = message;
   if (!content) {
@@ -20,7 +20,8 @@ export async function sendChannelCommand(teamId: string, channelId: string, mess
     process.exit(1);
   }
 
-  const result = await sendChannelMessage(teamId, channelId, content);
+  const contentType = opts.html ? 'html' : 'text';
+  const result = await sendChannelMessage(teamId, channelId, content, contentType);
 
   if (opts.json) {
     outputJson(result);

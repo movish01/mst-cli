@@ -8,6 +8,8 @@ export const MSAL_CONFIG = {
 export const SCOPES = [
   'Chat.ReadWrite',
   'Team.ReadBasic.All',
+  'Channel.ReadBasic.All',
+  'ChannelMessage.Send',
   'User.Read',
   'User.ReadBasic.All',
 ];

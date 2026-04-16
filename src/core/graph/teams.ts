@@ -25,13 +25,14 @@ export async function getChannelMessages(teamId: string, channelId: string, top 
   return (response.value as ChatMessage[]).reverse();
 }
 
-export async function sendChannelMessage(teamId: string, channelId: string, content: string): Promise<ChatMessage> {
+export async function sendChannelMessage(teamId: string, channelId: string, content: string, contentType: 'text' | 'html' = 'text'): Promise<ChatMessage> {
   const client = getGraphClient();
 
   const response = await client
     .api(`/teams/${teamId}/channels/${channelId}/messages`)
     .post({
       body: {
+        contentType,
         content,
       },
     });

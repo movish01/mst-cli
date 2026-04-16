@@ -86,6 +86,7 @@ program
   .command('send-channel <teamId> <channelId> [message]')
   .description('Send a message to a team channel')
   .option('--json', 'Output as JSON')
+  .option('--html', 'Send message as HTML')
   .action(async (teamId, channelId, message, opts) => {
     const { sendChannelCommand } = await import('./cli/send-channel.js');
     await sendChannelCommand(teamId, channelId, message, opts);
