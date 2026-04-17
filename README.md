@@ -106,6 +106,7 @@ msteams-cli teams                                              # list your teams
 msteams-cli teams --json
 msteams-cli channels <team-id>                                 # list channels in a team
 msteams-cli send-channel <team-id> <channel-id> "message"      # send to a channel
+msteams-cli send-channel <team-id> <channel-id> "<b>bold</b>" --html  # send HTML-formatted message
 ```
 
 ### Unread
@@ -171,6 +172,8 @@ msteams-cli requests the following Microsoft Graph scopes:
 
 - `Chat.ReadWrite` — read and send chat messages
 - `Team.ReadBasic.All` — list teams and channels
+- `Channel.ReadBasic.All` — list channels in teams
+- `ChannelMessage.Send` — send messages to channels
 - `User.Read` — get your own profile
 - `User.ReadBasic.All` — search org directory for people
 
