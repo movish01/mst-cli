@@ -78,6 +78,6 @@ describe('sendChannelMessage', () => {
 
     const result = await sendChannelMessage('team-1', 'ch-1', 'hello');
     expect(result.id).toBe('msg-1');
-    expect(mockPost).toHaveBeenCalledWith({ body: { content: 'hello' } });
+    expect(mockPost).toHaveBeenCalledWith({ body: { contentType: 'text', content: 'hello' } });
   });
 });
